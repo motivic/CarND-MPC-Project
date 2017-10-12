@@ -92,14 +92,25 @@ int main() {
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
 
-          /*
-          * TODO: Calculate steering angle and throttle using MPC.
-          *
-          * Both are in between [-1, 1].
-          *
-          */
-          double steer_value;
-          double throttle_value;
+          // Fit a cubic polynomial to the waypoints
+          Eigen::VectorXd xv = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsx.data(), ptsx.size());
+          Eigen::VectorXd yv = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsy.data(), ptsy.size());
+          // Eigen::VectorXf xv(ptsx.data());
+          // Eigen::VectorXf yv(ptsy.data());
+          auto coeffs = polyfit(xv, yv, 3);
+          // Calculate the cross track error
+          double cte = polyeval(coeffs, px) - py;
+          // Calculate the orientation error
+          double epsi = deg2rad(psi) - atan(coeffs[1] + 2*coeffs[2]*px + 3*coeffs[3]*px*px);
+
+          // Initiatialize state vector
+          Eigen::VectorXd state(6);
+          state << px, py, deg2rad(psi), v, cte, epsi;
+
+          // Calculate the steering angle and throttle
+          vector<double> actuation = mpc.Solve(state, coeffs);
+          double steer_value = -actuation[6];
+          double throttle_value = actuation[7];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -118,8 +129,8 @@ int main() {
           msgJson["mpc_y"] = mpc_y_vals;
 
           //Display the waypoints/reference line
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
+          vector<double> next_x_vals = {10.0, 20.0, 30.0, 40.0, 50.0};
+          vector<double> next_y_vals = {0.0, 0.0, 0.0, 0.0, 0.0};
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
@@ -139,7 +150,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(100));
+          // this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
