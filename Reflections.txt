@@ -8,7 +8,7 @@ how the various states of the car are related to each other (e.g. how
 its location is related to its speed and angle). These equations are
 on lines 100-105 in MPC.cpp. In particular, the constraints
 
-	fg[1+cte_start+i] = cte1 - ((f0-y0) + (v0*CppAD::sin(epsi0)*dt))      
+    fg[1+cte_start+i] = cte1 - ((f0-y0) + (v0*CppAD::sin(epsi0)*dt))      
     fg[1+epsi_start+i] = epsi1 - ((psi0-psides0) + v0/Lf*delta0*dt)
 
 in part help to ensure the vehicle will follow the path defined by the
@@ -27,6 +27,8 @@ Once the MPC receives the initial state, it initiatizes the necessary constraint
 
 Because the car is typically moving at a high speed (say > 20mph) and has to 
 respond in real time, I set the timestep length to be 0.02 seconds so the set of actuation returned is to control the action of the car in the next 0.02 seconds. Again, because the car is going at high speed, we want to make sure we predict sufficiently far (but not overly far since the road condition may change) so we have confidence that the car will behave well for the next several timesteps onwards. Another factor to keep in mind when choosing N is that the larger N is, the longer the model will have to run. I found N=100 to be a good number and it allows us to model the behavior of the car over the next two seconds.
+
+I didn't try to many other values (only N=50 and dt=0.02s, it didn't make much of a difference).
 
 
 3. Describe preprocessing of waypoints, vehicle state, and/or actuators prior to MPC:
