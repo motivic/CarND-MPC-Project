@@ -94,6 +94,9 @@ int main() {
           double delta = j[1]["steering_angle"];
           double a = j[1]["throttle"];
 
+          // I got the idea for the following transformation from
+          // https://discussions.udacity.com/t/car-almost-running-in-circles/389620/3
+
           // Need to transform the waypoints from Unity coordinate system
           // to vehicle's coordinate system
           vector<double> wp_x(ptsx.size());
@@ -121,6 +124,9 @@ int main() {
           const double latency = 0.1; // The latency is 100 milliseconds
           const double Lf = 2.67;
 
+          // I got the idea for addressing latency from
+          // https://discussions.udacity.com/t/car-almost-running-in-circles/389620
+          // and https://github.com/ssbagalkar/CarND-MPC-Project/blob/master/src/main.cpp
           double est_px = v * latency;
           double est_py = 0.0;
           double est_psi = 0.0 + v * -delta/Lf * latency;
