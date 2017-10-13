@@ -1,0 +1,43 @@
+I address the questions in the rubric here.
+
+1. Model description:
+
+On a high level, the MPC model is essentially solving a constrained 
+optimization problem. The constraints, which are non-linear, specify
+how the various states of the car are related to each other (e.g. how
+its location is related to its speed and angle). These equations are
+on lines 100-105 in MPC.cpp. In particular, the constraints
+
+	fg[1+cte_start+i] = cte1 - ((f0-y0) + (v0*CppAD::sin(epsi0)*dt))      
+    fg[1+epsi_start+i] = epsi1 - ((psi0-psides0) + v0/Lf*delta0*dt)
+
+in part help to ensure the vehicle will follow the path defined by the
+waypoints (which are passed to the MPC model through as the coefficients 
+of a cubic polynomial fitted on these very waypoints).
+
+The value to optimize is a cost function that is defined as a weighted sum of 
+the cross track error, the angular deviation, the difference between current speed and the desired speed, and four other factors aimed at modulating the steering angle and throttle (so as to keep the motion of the car smooth and not overly jerky).  
+
+More specifically, the initial state consists of the x-coord, y-coord, angle, speed, cross track error, and angular deviation of the car--with the caveat that these are not the measurements at the very instant when MPC is run, but are rather estimated values a bit in the future (by a fraction of a second equal to the latency) to account for the latency in transmission. 
+
+Once the MPC receives the initial state, it initiatizes the necessary constraint equations and variables for the future states that we are predicting, then solves for these future states (future x-coord, y-coord, angle, speed, cross track error, angular deviation, steering angle, throttle) so as to minimize the cost function mentioned before while satisfying the constraints. In particular, this process finds what the immediate steering angle and throttle should be in order for the car transition into the states predicted by the model. These actuator values are return the car so it can act on it.
+
+
+2. Reasoning behind timestep length and elapsed duration:
+
+Because the car is typically moving at a high speed (say > 20mph) and has to 
+respond in real time, I set the timestep length to be 0.02 seconds so the set of actuation returned is to control the action of the car in the next 0.02 seconds. Again, because the car is going at high speed, we want to make sure we predict sufficiently far (but not overly far since the road condition may change) so we have confidence that the car will behave well for the next several timesteps onwards. Another factor to keep in mind when choosing N is that the larger N is, the longer the model will have to run. I found N=100 to be a good number and it allows us to model the behavior of the car over the next two seconds.
+
+
+3. Describe preprocessing of waypoints, vehicle state, and/or actuators prior to MPC:
+
+Because the waypoints are provided in Unity coordinates, I transformed them into the car coordinates by taking a difference between each waypoint and the location of the car (in Unity coordinates) and then rotating the resulting differences counter-clockwise by the angle of the car. 
+
+Also the vehicle state passed to MPC is the measured state of the car at the very instant, but instead an estimate in the future by a number of seconds equal to the latency. This is to account for the latency in signal transmission. 
+
+The actuators are not modified prior to calling MPC.
+
+
+4. How to deal with latency:
+
+As mentioned earlier, to address latency, I estimated a future state of the vehilce (after latency number of seconds) and passed that in as the initial state to the MPC procedure. This allows the MPC to predict future state of the vehicle from the latency point forward, and return the actuators with the latency accounted for.
