@@ -6,8 +6,8 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-size_t N = 100;
-double dt = 0.01;
+const size_t N = 50;
+const double dt = 0.02;
 
 // This value assumes the model presented in the classroom is used.
 //
@@ -22,7 +22,7 @@ double dt = 0.01;
 const double Lf = 2.67;
 
 // Reference velocity
-double ref_v = 30;
+double ref_v = 40;
 
 // Start of various variables
 size_t x_start = 0;
@@ -51,21 +51,21 @@ class FG_eval {
 
     // Reference state cost
     for (unsigned int i=0; i<N; ++i) {
-      fg[0] += CppAD::pow(vars[cte_start+i], 2);
+      fg[0] += 0.5*CppAD::pow(vars[cte_start+i], 2);
       fg[0] += CppAD::pow(vars[epsi_start+i], 2);
       fg[0] += CppAD::pow(vars[v_start+i]-ref_v, 2); // Ensure sufficient speed
     }
-
+    
     // Moderate actuation
     for (unsigned int i=0; i<N-1; ++i) {
-      fg[0] += CppAD::pow(vars[delta_start+i], 2);
+      fg[0] += 5000 * CppAD::pow(vars[delta_start+i], 2);
       fg[0] += CppAD::pow(vars[a_start+i], 2);
     }
 
     // Moderate changes in acutation
     for (unsigned int i=0; i<N-2; ++i) {
       fg[0] += 100 * CppAD::pow(vars[delta_start+i+1] - vars[delta_start+i], 2);
-      fg[0] += CppAD::pow(vars[a_start+i+1] - vars[a_start+i], 2);
+      fg[0] += 10 * CppAD::pow(vars[a_start+i+1] - vars[a_start+i], 2);
     }
 
     // Setup constraints
@@ -135,7 +135,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   vars[psi_start] = state[2];
   vars[v_start] = state[3];
   vars[cte_start] = state[4];
-  vars[epsi_start] = state[5]; 
+  vars[epsi_start] = state[5];
 
   Dvector vars_lowerbound(n_vars);
   Dvector vars_upperbound(n_vars);
@@ -220,8 +220,14 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   std::cout << "Cost " << cost << std::endl;
 
   // Return the predicted position and the first actuator values
-  return {solution.x[x_start+1], solution.x[y_start+1],
-          solution.x[psi_start+1], solution.x[v_start+1],
-          solution.x[cte_start+1], solution.x[epsi_start+1],
-          solution.x[delta_start], solution.x[a_start]}; 
+  vector<double> results;
+  results.push_back(solution.x[delta_start]); // save steering angle
+  results.push_back(solution.x[a_start]); // save throttle
+  results.push_back(N); // save the number of points predicted
+  
+  for (unsigned int i=0; i<N; ++i) {
+    results.push_back(solution.x[x_start+2+i]);
+    results.push_back(solution.x[y_start+2+i]);
+  }
+  return results;
 }

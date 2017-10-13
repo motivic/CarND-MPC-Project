@@ -91,36 +91,65 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double delta = j[1]["steering_angle"];
+          double a = j[1]["throttle"];
+
+          // Need to transform the waypoints from Unity coordinate system
+          // to vehicle's coordinate system
+          vector<double> wp_x(ptsx.size());
+          vector<double> wp_y(ptsy.size());
+          for (unsigned int i=0; i<ptsx.size(); ++i) {
+            double x_offset = ptsx[i] - px;
+            double y_offset = ptsy[i] - py;
+           
+            wp_y[i] = cos(psi) * y_offset - sin(psi) * x_offset;
+            wp_x[i] = cos(psi) * x_offset + sin(psi) * y_offset;
+          }
 
           // Fit a cubic polynomial to the waypoints
-          Eigen::VectorXd xv = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsx.data(), ptsx.size());
-          Eigen::VectorXd yv = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsy.data(), ptsy.size());
-          // Eigen::VectorXf xv(ptsx.data());
-          // Eigen::VectorXf yv(ptsy.data());
+          Eigen::VectorXd xv = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(wp_x.data(), wp_x.size());
+          Eigen::VectorXd yv = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(wp_y.data(), wp_y.size());
+
           auto coeffs = polyfit(xv, yv, 3);
           // Calculate the cross track error
-          double cte = polyeval(coeffs, px) - py;
-          // Calculate the orientation error
-          double epsi = deg2rad(psi) - atan(coeffs[1] + 2*coeffs[2]*px + 3*coeffs[3]*px*px);
+          double cte = polyeval(coeffs, 0);
 
-          // Initiatialize state vector
+          // Calculate the orientation error
+          double epsi = -atan(coeffs[1]);
+
+          // Initiatialize state vector taken into consideration of latency
+          const double latency = 0.1; // The latency is 100 milliseconds
+          const double Lf = 2.67;
+
+          double est_px = v * latency;
+          double est_py = 0.0;
+          double est_psi = 0.0 + v * -delta/Lf * latency;
+          double est_v = v + a * latency;
+          double est_cte = cte + v * sin(epsi) * latency;
+          double est_epsi = epsi + v * -delta/Lf * latency;
+
           Eigen::VectorXd state(6);
-          state << px, py, deg2rad(psi), v, cte, epsi;
+          state << est_px, est_py, est_psi, est_v, est_cte, est_epsi;
 
           // Calculate the steering angle and throttle
-          vector<double> actuation = mpc.Solve(state, coeffs);
-          double steer_value = -actuation[6];
-          double throttle_value = actuation[7];
+          vector<double> results = mpc.Solve(state, coeffs);
+          double steer_value = -results[0];
+          double throttle_value = results[1];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-          msgJson["steering_angle"] = steer_value;
+          msgJson["steering_angle"] = steer_value/deg2rad(25);
           msgJson["throttle"] = throttle_value;
 
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
+
+          for (unsigned int i=0; i<results[2]; ++i) {
+            mpc_x_vals.push_back(results[3+2*i]);
+            mpc_y_vals.push_back(results[4+2*i]);
+          }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
@@ -129,15 +158,18 @@ int main() {
           msgJson["mpc_y"] = mpc_y_vals;
 
           //Display the waypoints/reference line
-          vector<double> next_x_vals = {10.0, 20.0, 30.0, 40.0, 50.0};
-          vector<double> next_y_vals = {0.0, 0.0, 0.0, 0.0, 0.0};
+          vector<double> next_x_vals;
+          vector<double> next_y_vals;
+          for (unsigned i=10; i<100; i+=10) {
+            next_x_vals.push_back(i);
+            next_y_vals.push_back(polyeval(coeffs, i));
+          }
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
-
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           std::cout << msg << std::endl;
@@ -150,7 +182,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          // this_thread::sleep_for(chrono::milliseconds(100));
+          this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
